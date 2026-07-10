@@ -455,7 +455,7 @@ async function fetchFlights() {
  
 async function tryADSBLol() {
   try {
-    const url = "https://api.adsb.lol/v2/lat/" + state.lat + "/lon/" + state.lon + "/dist/150";
+    const url = "https://silent-glitter-29e1.ravikhamar.workers.dev/?lat=" + state.lat + "&lon=" + state.lon;
     debugLog("-> adsb.lol request");
     const res = await fetch(url, { mode: "cors" });
     debugLog("<- adsb.lol status: " + res.status);
