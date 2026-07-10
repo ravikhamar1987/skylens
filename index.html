@@ -397,35 +397,55 @@ $('retry-btn').addEventListener('click', () => {
 
 async function requestAll() {
   permScreen.classList.add('hidden');
+
+  // Step 1: Camera
+  let stream;
   try {
-    // Camera
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
     });
     video.srcObject = stream;
+  } catch (e) {
+    showError('Camera access failed. Go to Settings → Safari → Camera and set to Allow. Then reload the page.\n\nDetail: ' + e.message);
+    return;
+  }
 
-    // Location
+  // Step 2: Location
+  try {
     await new Promise((res, rej) => {
       navigator.geolocation.getCurrentPosition(pos => {
         state.lat = pos.coords.latitude;
         state.lon = pos.coords.longitude;
         res();
-      }, rej, { enableHighAccuracy: true });
+      }, rej, { enableHighAccuracy: true, timeout: 10000 });
     });
-
-    // Motion (iOS needs user gesture)
-    if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
-      const perm = await DeviceOrientationEvent.requestPermission();
-      if (perm !== 'granted') throw new Error('Motion denied');
-    }
-
-    startAR();
   } catch (e) {
-    $('error-msg').textContent = e.message?.includes('denied') || e.code === 1
-      ? 'Camera or location access was denied. Please enable in Settings → Safari.'
-      : 'Could not start SkyLens: ' + (e.message || 'Unknown error');
-    errScreen.classList.remove('hidden');
+    showError('Location access failed. Go to Settings → Privacy & Security → Location Services → Safari and set to "While Using". Then reload.\n\nDetail: ' + (e.message || 'code ' + e.code));
+    return;
   }
+
+  // Step 3: Motion (iOS 13+)
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const perm = await DeviceOrientationEvent.requestPermission();
+      if (perm !== 'granted') {
+        showError('Motion sensor access was denied. Tap "Grant Permissions" again and choose Allow when iOS asks about motion & orientation.');
+        return;
+      }
+    }
+    // If no requestPermission method, motion is available by default (Android/older iOS)
+  } catch (e) {
+    // Motion failed but not critical — continue without it, use manual heading
+    console.warn('Motion permission error:', e);
+    state.noMotion = true;
+  }
+
+  startAR();
+}
+
+function showError(msg) {
+  $('error-msg').textContent = msg;
+  errScreen.classList.remove('hidden');
 }
 
 // ─── AR Loop ─────────────────────────────────────────────
@@ -434,10 +454,25 @@ function startAR() {
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('deviceorientation', onOrientation, true);
+  window.addEventListener('deviceorientationabsolute', onOrientation, true);
+
   navigator.geolocation.watchPosition(p => {
     state.lat = p.coords.latitude;
     state.lon = p.coords.longitude;
   }, null, { enableHighAccuracy: true });
+
+  // If no motion, show manual heading control
+  if (state.noMotion) {
+    const ctrl = document.createElement('div');
+    ctrl.style.cssText = 'position:fixed;bottom:100px;left:0;right:0;z-index:20;padding:0 24px;';
+    ctrl.innerHTML = `
+      <div style="color:rgba(255,255,255,0.5);font-size:11px;text-align:center;margin-bottom:6px;letter-spacing:0.08em;">MANUAL HEADING (compass unavailable)</div>
+      <input type="range" min="0" max="359" value="0" id="heading-slider"
+        style="width:100%;accent-color:#00d4ff;"
+        oninput="state.heading=+this.value;document.getElementById('heading-val').textContent=this.value+'°'">
+    `;
+    document.body.appendChild(ctrl);
+  }
 
   fetchFlights();
   setInterval(fetchFlights, state.fetchInterval);
