@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SkyLens AR</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #000;
+    --glass: rgba(8, 12, 20, 0.82);
+    --border: rgba(255,255,255,0.08);
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --text: #f0f4ff;
+    --muted: rgba(240,244,255,0.45);
+    --card-w: 200px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    height: 100dvh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #camera-feed {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
+  #ar-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* HUD */
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    padding: 52px 20px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
+  }
+
+  #logo {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  #logo span { color: var(--accent); }
+
+  #compass-ring {
+    width: 52px; height: 52px;
+    position: relative;
+  }
+  #compass-ring svg { width: 100%; height: 100%; }
+
+  #stats-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    padding: 16px 20px 36px;
+    background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .stat-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value.accent { color: var(--accent); }
+
+  /* Flight cards */
+  .flight-card {
+    position: absolute;
+    width: var(--card-w);
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transform: translate(-50%, -115%);
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,212,255,0.15);
+  }
+
+  .flight-card::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    height: 6px;
+    background: var(--accent);
+  }
+
+  .card-callsign {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .card-route {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+
+  .card-divider {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 8px;
+  }
+
+  .card-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .card-field {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .field-label {
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .field-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Dot marker */
+  .flight-dot {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.25), 0 0 12px rgba(0,212,255,0.6);
+    pointer-events: none;
+  }
+
+  .flight-dot.far { background: var(--accent2); box-shadow: 0 0 0 3px rgba(255,107,53,0.25), 0 0 12px rgba(255,107,53,0.6); }
+
+  /* Crosshair */
+  #crosshair {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  /* Screens */
+  #splash, #permission-screen, #error-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    padding: 32px;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .screen-icon { font-size: 56px; margin-bottom: 8px; }
+  .screen-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+  .screen-title span { color: var(--accent); }
+  .screen-sub { font-size: 15px; color: var(--muted); line-height: 1.5; max-width: 280px; }
+
+  .btn {
+    margin-top: 8px;
+    padding: 14px 32px;
+    border-radius: 50px;
+    border: none;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    background: var(--accent);
+    color: #000;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn.secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+
+  #splash { gap: 12px; }
+  #splash .tagline { font-size: 13px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* Scan line animation */
+  @keyframes scan {
+    0% { top: 0; opacity: 0.6; }
+    100% { top: 100%; opacity: 0; }
+  }
+  .scan-line {
+    position: fixed;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--accent), transparent);
+    z-index: 2;
+    pointer-events: none;
+    animation: scan 3s linear infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    50% { opacity: 0.6; transform: translate(-50%,-50%) scale(1.3); }
+  }
+
+  #no-flights-msg {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 8;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+
+  #no-flights-msg.visible { opacity: 1; }
+  #no-flights-msg p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Splash -->
+<div id="splash">
+  <div class="screen-icon">✈️</div>
+  <div class="screen-title">Sky<span>Lens</span></div>
+  <div class="tagline">Flight AR Tracker</div>
+  <div class="screen-sub">Point your phone at the sky to identify planes flying overhead in real time.</div>
+  <button class="btn" id="start-btn">Launch SkyLens</button>
+</div>
+
+<!-- Permission screen -->
+<div id="permission-screen" class="hidden">
+  <div class="screen-icon">📡</div>
+  <div class="screen-title">Allow <span>Access</span></div>
+  <div class="screen-sub">SkyLens needs your camera, location, and motion sensors to track flights overhead.</div>
+  <button class="btn" id="request-btn">Grant Permissions</button>
+</div>
+
+<!-- Error screen -->
+<div id="error-screen" class="hidden">
+  <div class="screen-icon">⚠️</div>
+  <div class="screen-title"><span>Permission</span> Denied</div>
+  <div class="screen-sub" id="error-msg">Camera or location access was denied. Please enable in Settings → Safari → Camera & Location.</div>
+  <button class="btn secondary" id="retry-btn">Try Again</button>
+</div>
+
+<!-- AR View -->
+<video id="camera-feed" autoplay playsinline muted></video>
+<canvas id="ar-canvas"></canvas>
+<div class="scan-line"></div>
+
+<!-- Crosshair -->
+<div id="crosshair">
+  <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+    <circle cx="20" cy="20" r="18" stroke="rgba(0,212,255,0.4)" stroke-width="1"/>
+    <line x1="20" y1="2" x2="20" y2="10" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
+    <line x1="20" y1="30" x2="20" y2="38" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
+    <line x1="2" y1="20" x2="10" y2="20" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
+    <line x1="30" y1="20" x2="38" y2="20" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
+    <circle cx="20" cy="20" r="2" fill="rgba(0,212,255,0.8)"/>
+  </svg>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="logo">Sky<span>Lens</span></div>
+  <div id="compass-ring">
+    <svg viewBox="0 0 52 52" fill="none">
+      <circle cx="26" cy="26" r="24" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+      <text x="26" y="9" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="7" font-family="sans-serif">N</text>
+      <text x="26" y="47" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="sans-serif">S</text>
+      <text x="8" y="29" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="sans-serif">W</text>
+      <text x="44" y="29" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="sans-serif">E</text>
+      <polygon id="compass-needle" points="26,12 29,26 26,24 23,26" fill="#00d4ff" transform-origin="26 26"/>
+    </svg>
+  </div>
+</div>
+
+<!-- No flights -->
+<div id="no-flights-msg">
+  <div style="font-size:32px">🔭</div>
+  <p>No flights detected nearby<br>Point at the sky and wait...</p>
+</div>
+
+<!-- Stats bar -->
+<div id="stats-bar">
+  <div class="stat">
+    <span class="stat-label">Heading</span>
+    <span class="stat-value accent" id="heading-val">---°</span>
+  </div>
+  <div class="stat" style="text-align:center">
+    <span class="stat-label">Flights Nearby</span>
+    <span class="stat-value" id="flights-val">--</span>
+  </div>
+  <div class="stat" style="text-align:right">
+    <span class="stat-label">Last Update</span>
+    <span class="stat-value" id="update-val">--:--</span>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+const state = {
+  lat: null, lon: null,
+  heading: 0, pitch: 0,
+  flights: [],
+  lastFetch: 0,
+  fetchInterval: 15000,
+  fovH: 60, fovV: 90,
+  active: false
+};
+
+// ─── Elements ────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const splash = $('splash');
+const permScreen = $('permission-screen');
+const errScreen = $('error-screen');
+const video = $('camera-feed');
+const canvas = $('ar-canvas');
+const ctx = canvas.getContext('2d');
+const needle = $('compass-needle');
+
+// ─── Splash → Permissions ─────────────────────────────────
+$('start-btn').addEventListener('click', () => {
+  splash.classList.add('hidden');
+  permScreen.classList.remove('hidden');
+});
+
+$('request-btn').addEventListener('click', requestAll);
+$('retry-btn').addEventListener('click', () => {
+  errScreen.classList.add('hidden');
+  permScreen.classList.remove('hidden');
+});
+
+async function requestAll() {
+  permScreen.classList.add('hidden');
+  try {
+    // Camera
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+    });
+    video.srcObject = stream;
+
+    // Location
+    await new Promise((res, rej) => {
+      navigator.geolocation.getCurrentPosition(pos => {
+        state.lat = pos.coords.latitude;
+        state.lon = pos.coords.longitude;
+        res();
+      }, rej, { enableHighAccuracy: true });
+    });
+
+    // Motion (iOS needs user gesture)
+    if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+      const perm = await DeviceOrientationEvent.requestPermission();
+      if (perm !== 'granted') throw new Error('Motion denied');
+    }
+
+    startAR();
+  } catch (e) {
+    $('error-msg').textContent = e.message?.includes('denied') || e.code === 1
+      ? 'Camera or location access was denied. Please enable in Settings → Safari.'
+      : 'Could not start SkyLens: ' + (e.message || 'Unknown error');
+    errScreen.classList.remove('hidden');
+  }
+}
+
+// ─── AR Loop ─────────────────────────────────────────────
+function startAR() {
+  state.active = true;
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('deviceorientation', onOrientation, true);
+  navigator.geolocation.watchPosition(p => {
+    state.lat = p.coords.latitude;
+    state.lon = p.coords.longitude;
+  }, null, { enableHighAccuracy: true });
+
+  fetchFlights();
+  setInterval(fetchFlights, state.fetchInterval);
+  requestAnimationFrame(render);
+}
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+// ─── Orientation ─────────────────────────────────────────
+function onOrientation(e) {
+  // heading: alpha is compass on iOS with webkitCompassHeading
+  if (e.webkitCompassHeading !== undefined) {
+    state.heading = e.webkitCompassHeading;
+  } else if (e.alpha !== null) {
+    state.heading = (360 - e.alpha) % 360;
+  }
+  // pitch: beta — 0 = flat, 90 = pointing up
+  state.pitch = e.beta ?? 0;
+
+  $('heading-val').textContent = Math.round(state.heading) + '°';
+  needle.setAttribute('transform', `rotate(${state.heading}, 26, 26)`);
+}
+
+// ─── Flight Fetch ─────────────────────────────────────────
+async function fetchFlights() {
+  if (!state.lat || !state.lon) return;
+  const r = 1.2; // ~130km box
+  const url = `https://opensky-network.org/api/states/all?lamin=${state.lat-r}&lomin=${state.lon-r}&lamax=${state.lat+r}&lomax=${state.lon+r}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.states) { state.flights = []; return; }
+
+    state.flights = data.states
+      .filter(s => s[5] && s[6] && s[7] > 500) // has position & altitude
+      .map(s => ({
+        icao: s[0],
+        callsign: (s[1] || 'Unknown').trim() || s[0].toUpperCase(),
+        country: s[2] || '?',
+        lon: s[5],
+        lat: s[6],
+        altitude: Math.round(s[7] * 3.28084), // m → ft
+        speed: s[9] ? Math.round(s[9] * 1.94384) : null, // m/s → knots
+        heading: s[10] ? Math.round(s[10]) : null,
+        origin: s[11] || null,
+        dest: s[12] || null,
+      }));
+
+    $('flights-val').textContent = state.flights.length;
+    const now = new Date();
+    $('update-val').textContent = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  } catch(e) {
+    console.warn('Flight fetch failed', e);
+  }
+}
+
+// ─── Bearing & Distance ──────────────────────────────────
+function bearingTo(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180;
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLon = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function elevationAngle(distKm, altFt) {
+  const altM = altFt / 3.28084;
+  return Math.atan2(altM, distKm * 1000) * 180 / Math.PI;
+}
+
+// ─── Project to screen ───────────────────────────────────
+function projectFlight(flight) {
+  const bearing = bearingTo(state.lat, state.lon, flight.lat, flight.lon);
+  const dist = distanceKm(state.lat, state.lon, flight.lat, flight.lon);
+  const elev = elevationAngle(dist, flight.altitude);
+
+  // Angular delta from current heading
+  let dAz = bearing - state.heading;
+  if (dAz > 180) dAz -= 360;
+  if (dAz < -180) dAz += 360;
+
+  // Elevation: phone pitch 90 = pointing straight up
+  // When pitch=90, elev=90 should be center screen
+  // When pitch=0 (horizontal), elev=0 (horizon) is center
+  const dEl = elev - (state.pitch - 90);
+
+  const W = canvas.width, H = canvas.height;
+  const x = W/2 + (dAz / (state.fovH/2)) * (W/2);
+  const y = H/2 - (dEl / (state.fovV/2)) * (H/2);
+
+  const onScreen = Math.abs(dAz) < state.fovH && Math.abs(dEl) < state.fovV * 1.5;
+
+  return { x, y, onScreen, bearing, dist, elev, dAz, dEl };
+}
+
+// ─── Render ───────────────────────────────────────────────
+// Remove old DOM cards
+let domCards = {};
+
+function render() {
+  if (!state.active) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const visibleIds = new Set();
+
+  state.flights.forEach(flight => {
+    const proj = projectFlight(flight);
+    if (!proj.onScreen) return;
+
+    visibleIds.add(flight.icao);
+
+    // Draw dot
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = proj.dist < 50 ? '#00d4ff' : '#ff6b35';
+    ctx.shadowColor = proj.dist < 50 ? '#00d4ff' : '#ff6b35';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Draw line to card
+    ctx.beginPath();
+    ctx.moveTo(proj.x, proj.y - 5);
+    ctx.lineTo(proj.x, proj.y - 40);
+    ctx.strokeStyle = 'rgba(0,212,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // DOM card
+    if (!domCards[flight.icao]) {
+      const card = document.createElement('div');
+      card.className = 'flight-card';
+      card.id = 'card-' + flight.icao;
+      document.body.appendChild(card);
+      domCards[flight.icao] = card;
+    }
+
+    const card = domCards[flight.icao];
+    card.style.left = proj.x + 'px';
+    card.style.top = (proj.y - 44) + 'px';
+
+    const route = flight.origin && flight.dest
+      ? `${flight.origin.substring(0,4)} → ${flight.dest.substring(0,4)}`
+      : flight.country;
+
+    card.innerHTML = `
+      <div class="card-callsign">${flight.callsign}</div>
+      <div class="card-route">${route}</div>
+      <div class="card-divider"></div>
+      <div class="card-row">
+        <div class="card-field">
+          <span class="field-label">Altitude</span>
+          <span class="field-value">${flight.altitude.toLocaleString()} ft</span>
+        </div>
+        <div class="card-field" style="text-align:right">
+          <span class="field-label">Distance</span>
+          <span class="field-value">${Math.round(proj.dist)} km</span>
+        </div>
+      </div>
+      <div class="card-row">
+        <div class="card-field">
+          <span class="field-label">Speed</span>
+          <span class="field-value">${flight.speed ? flight.speed + ' kts' : '---'}</span>
+        </div>
+        <div class="card-field" style="text-align:right">
+          <span class="field-label">Bearing</span>
+          <span class="field-value">${Math.round(proj.bearing)}°</span>
+        </div>
+      </div>
+    `;
+  });
+
+  // Remove off-screen cards
+  Object.keys(domCards).forEach(icao => {
+    if (!visibleIds.has(icao)) {
+      domCards[icao].remove();
+      delete domCards[icao];
+    }
+  });
+
+  // No flights message
+  const noFlights = $('no-flights-msg');
+  if (state.flights.length === 0) {
+    noFlights.classList.add('visible');
+  } else {
+    noFlights.classList.remove('visible');
+  }
+
+  requestAnimationFrame(render);
+}
+</script>
+</body>
+</html>
