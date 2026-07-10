@@ -6,316 +6,224 @@
 <title>SkyLens AR</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
- 
   :root {
     --bg: #000;
-    --glass: rgba(8, 12, 20, 0.82);
+    --glass: rgba(8,12,20,0.85);
     --border: rgba(255,255,255,0.08);
     --accent: #00d4ff;
     --accent2: #ff6b35;
     --text: #f0f4ff;
     --muted: rgba(240,244,255,0.45);
-    --card-w: 200px;
   }
- 
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     height: 100dvh;
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
   }
  
-  #camera-feed {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 0;
+  /* ── Screens ── */
+  .screen {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #000; padding: 32px; text-align: center; gap: 14px;
   }
- 
-  #ar-canvas {
-    position: fixed;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-  }
- 
-  /* HUD */
-  #hud {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    z-index: 10;
-    padding: 52px 20px 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
-  }
- 
-  #logo {
-    font-size: 18px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--text);
-  }
-  #logo span { color: var(--accent); }
- 
-  #compass-ring {
-    width: 52px; height: 52px;
-    position: relative;
-  }
-  #compass-ring svg { width: 100%; height: 100%; }
- 
-  #stats-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 10;
-    padding: 16px 20px 36px;
-    background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-  }
- 
-  .stat {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .stat-label {
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .stat-value {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
-  .stat-value.accent { color: var(--accent); }
- 
-  /* Flight cards */
-  .flight-card {
-    position: absolute;
-    width: var(--card-w);
-    background: var(--glass);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 12px 14px;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    transform: translate(-50%, -115%);
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,212,255,0.15);
-  }
- 
-  .flight-card::after {
-    content: '';
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 1px;
-    height: 6px;
-    background: var(--accent);
-  }
- 
-  .card-callsign {
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
- 
-  .card-route {
-    font-size: 11px;
-    color: var(--accent);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    margin-bottom: 8px;
-  }
- 
-  .card-divider {
-    height: 1px;
-    background: var(--border);
-    margin-bottom: 8px;
-  }
- 
-  .card-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
- 
-  .card-field {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
- 
-  .field-label {
-    font-size: 8px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
- 
-  .field-value {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
- 
-  /* Dot marker */
-  .flight-dot {
-    position: absolute;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: var(--accent);
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 0 3px rgba(0,212,255,0.25), 0 0 12px rgba(0,212,255,0.6);
-    pointer-events: none;
-  }
- 
-  .flight-dot.far { background: var(--accent2); box-shadow: 0 0 0 3px rgba(255,107,53,0.25), 0 0 12px rgba(255,107,53,0.6); }
- 
-  /* Crosshair */
-  #crosshair {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 5;
-    pointer-events: none;
-    opacity: 0.5;
-  }
- 
-  /* Screens */
-  #splash, #permission-screen, #error-screen {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #000;
-    padding: 32px;
-    text-align: center;
-    gap: 16px;
-  }
- 
-  .screen-icon { font-size: 56px; margin-bottom: 8px; }
+  .screen.hidden { display: none !important; }
+  .screen-icon { font-size: 52px; }
   .screen-title { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
   .screen-title span { color: var(--accent); }
-  .screen-sub { font-size: 15px; color: var(--muted); line-height: 1.5; max-width: 280px; }
- 
+  .screen-sub { font-size: 14px; color: var(--muted); line-height: 1.55; max-width: 290px; }
   .btn {
-    margin-top: 8px;
-    padding: 14px 32px;
-    border-radius: 50px;
-    border: none;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    cursor: pointer;
-    background: var(--accent);
-    color: #000;
+    margin-top: 6px; padding: 14px 32px;
+    border-radius: 50px; border: none;
+    font-size: 15px; font-weight: 700; letter-spacing: 0.04em;
+    cursor: pointer; background: var(--accent); color: #000;
     -webkit-tap-highlight-color: transparent;
   }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
  
-  .btn.secondary {
-    background: transparent;
-    color: var(--accent);
-    border: 1px solid var(--accent);
+  /* ── AR View ── */
+  #camera-feed {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover; z-index: 0;
   }
- 
-  #splash { gap: 12px; }
-  #splash .tagline { font-size: 13px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
- 
-  /* Scan line animation */
-  @keyframes scan {
-    0% { top: 0; opacity: 0.6; }
-    100% { top: 100%; opacity: 0; }
+  #ar-canvas {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
   }
   .scan-line {
-    position: fixed;
-    left: 0; right: 0;
-    height: 1px;
+    position: fixed; left: 0; right: 0; height: 1px;
     background: linear-gradient(to right, transparent, var(--accent), transparent);
-    z-index: 2;
-    pointer-events: none;
+    z-index: 2; pointer-events: none;
     animation: scan 3s linear infinite;
   }
- 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
-    50% { opacity: 0.6; transform: translate(-50%,-50%) scale(1.3); }
+  @keyframes scan {
+    0%   { top: 0;    opacity: 0.5; }
+    100% { top: 100%; opacity: 0; }
   }
+ 
+  /* ── HUD ── */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    padding: 52px 20px 14px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.65) 0%, transparent 100%);
+  }
+  #logo { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; }
+  #logo span { color: var(--accent); }
+  #compass-ring { width: 50px; height: 50px; }
+  #compass-ring svg { width: 100%; height: 100%; }
+ 
+  /* ── Mode toggle ── */
+  #mode-toggle {
+    position: fixed; top: 110px; left: 50%; transform: translateX(-50%);
+    z-index: 15; display: flex;
+    background: rgba(0,0,0,0.6); border: 1px solid var(--border);
+    border-radius: 50px; padding: 3px; gap: 2px;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  .mode-btn {
+    padding: 7px 18px; border-radius: 50px; border: none;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    cursor: pointer; color: var(--muted); background: transparent;
+    -webkit-tap-highlight-color: transparent; transition: all 0.2s;
+  }
+  .mode-btn.active { background: var(--accent); color: #000; }
+ 
+  /* ── Stats bar ── */
+  #stats-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    padding: 14px 20px 36px;
+    background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%);
+    display: flex; justify-content: space-between; align-items: flex-end;
+  }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .stat-value { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat-value.accent { color: var(--accent); }
+ 
+  /* ── Pitch calibration ── */
+  #pitch-ctrl {
+    position: fixed; bottom: 90px; left: 20px; right: 20px; z-index: 15;
+    display: none;
+  }
+  #pitch-ctrl label { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; display: block; margin-bottom: 4px; text-align: center; }
+  #pitch-ctrl input { width: 100%; accent-color: var(--accent); }
+ 
+  /* ── Flight cards ── */
+  .flight-card {
+    position: absolute;
+    width: 195px;
+    background: var(--glass);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-radius: 14px; padding: 11px 13px;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    transform: translate(-50%, -110%);
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .flight-card::after {
+    content: ''; position: absolute; bottom: -6px; left: 50%;
+    transform: translateX(-50%); width: 1px; height: 6px; background: var(--accent);
+  }
+  .card-callsign { font-size: 16px; font-weight: 700; margin-bottom: 3px; }
+  .card-route { font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: 0.05em; margin-bottom: 7px; }
+  .card-divider { height: 1px; background: var(--border); margin-bottom: 7px; }
+  .card-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .card-field { display: flex; flex-direction: column; gap: 1px; }
+  .field-label { font-size: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .field-value { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+ 
+  /* ── Crosshair ── */
+  #crosshair {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    z-index: 5; pointer-events: none; opacity: 0.45;
+  }
+ 
+  /* ── RADAR MODE ── */
+  #radar-view {
+    position: fixed; inset: 0; z-index: 3;
+    background: #000a0f;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #radar-view.active { display: flex; }
+ 
+  #radar-canvas {
+    width: min(88vw, 88vh);
+    height: min(88vw, 88vh);
+    border-radius: 50%;
+  }
+ 
+  #radar-list {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    max-height: 38vh; overflow-y: auto;
+    background: var(--glass);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    z-index: 4; padding-bottom: 36px;
+  }
+  .radar-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 20px; border-bottom: 1px solid var(--border);
+  }
+  .ri-left { display: flex; flex-direction: column; gap: 2px; }
+  .ri-callsign { font-size: 14px; font-weight: 700; }
+  .ri-route { font-size: 11px; color: var(--accent); }
+  .ri-right { text-align: right; }
+  .ri-alt { font-size: 13px; font-weight: 600; }
+  .ri-dist { font-size: 11px; color: var(--muted); }
  
   #no-flights-msg {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 8;
-    text-align: center;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.5s;
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    z-index: 8; text-align: center; pointer-events: none;
+    opacity: 0; transition: opacity 0.5s;
   }
- 
   #no-flights-msg.visible { opacity: 1; }
   #no-flights-msg p { font-size: 13px; color: var(--muted); margin-top: 6px; }
- 
-  .hidden { display: none !important; }
 </style>
 </head>
 <body>
  
 <!-- Splash -->
-<div id="splash">
+<div id="splash" class="screen">
   <div class="screen-icon">✈️</div>
   <div class="screen-title">Sky<span>Lens</span></div>
-  <div class="tagline">Flight AR Tracker</div>
-  <div class="screen-sub">Point your phone at the sky to identify planes flying overhead in real time.</div>
+  <div class="screen-sub" style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted)">Flight AR Tracker</div>
+  <div class="screen-sub">Point your phone at the sky to identify planes overhead in real time.</div>
   <button class="btn" id="start-btn">Launch SkyLens</button>
 </div>
  
-<!-- Permission screen -->
-<div id="permission-screen" class="hidden">
+<!-- Permission -->
+<div id="permission-screen" class="screen hidden">
   <div class="screen-icon">📡</div>
   <div class="screen-title">Allow <span>Access</span></div>
-  <div class="screen-sub">SkyLens needs your camera, location, and motion sensors to track flights overhead.</div>
+  <div class="screen-sub">SkyLens needs camera, location, and motion sensors. When iOS asks, tap <strong>Allow</strong> for each.</div>
   <button class="btn" id="request-btn">Grant Permissions</button>
 </div>
  
-<!-- Error screen -->
-<div id="error-screen" class="hidden">
+<!-- Error -->
+<div id="error-screen" class="screen hidden">
   <div class="screen-icon">⚠️</div>
-  <div class="screen-title"><span>Permission</span> Denied</div>
-  <div class="screen-sub" id="error-msg">Camera or location access was denied. Please enable in Settings → Safari → Camera & Location.</div>
-  <button class="btn secondary" id="retry-btn">Try Again</button>
+  <div class="screen-title"><span>Error</span></div>
+  <div class="screen-sub" id="error-msg"></div>
+  <button class="btn ghost" id="retry-btn">Try Again</button>
 </div>
  
-<!-- AR View -->
+<!-- AR -->
 <video id="camera-feed" autoplay playsinline muted></video>
 <canvas id="ar-canvas"></canvas>
 <div class="scan-line"></div>
  
-<!-- Crosshair -->
 <div id="crosshair">
   <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-    <circle cx="20" cy="20" r="18" stroke="rgba(0,212,255,0.4)" stroke-width="1"/>
+    <circle cx="20" cy="20" r="18" stroke="rgba(0,212,255,0.35)" stroke-width="1"/>
     <line x1="20" y1="2" x2="20" y2="10" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
     <line x1="20" y1="30" x2="20" y2="38" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
     <line x1="2" y1="20" x2="10" y2="20" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
@@ -329,23 +237,44 @@
   <div id="logo">Sky<span>Lens</span></div>
   <div id="compass-ring">
     <svg viewBox="0 0 52 52" fill="none">
-      <circle cx="26" cy="26" r="24" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
-      <text x="26" y="9" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="7" font-family="sans-serif">N</text>
-      <text x="26" y="47" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="sans-serif">S</text>
-      <text x="8" y="29" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="sans-serif">W</text>
-      <text x="44" y="29" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-size="7" font-family="sans-serif">E</text>
+      <circle cx="26" cy="26" r="24" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+      <text x="26" y="9"  text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="7" font-family="sans-serif">N</text>
+      <text x="26" y="47" text-anchor="middle" fill="rgba(255,255,255,0.25)" font-size="7" font-family="sans-serif">S</text>
+      <text x="8"  y="29" text-anchor="middle" fill="rgba(255,255,255,0.25)" font-size="7" font-family="sans-serif">W</text>
+      <text x="44" y="29" text-anchor="middle" fill="rgba(255,255,255,0.25)" font-size="7" font-family="sans-serif">E</text>
       <polygon id="compass-needle" points="26,12 29,26 26,24 23,26" fill="#00d4ff" transform-origin="26 26"/>
     </svg>
   </div>
 </div>
  
+<!-- Mode toggle -->
+<div id="mode-toggle">
+  <button class="mode-btn active" id="btn-ar" onclick="setMode('ar')">📷 AR</button>
+  <button class="mode-btn" id="btn-radar" onclick="setMode('radar')">🔴 Radar</button>
+</div>
+ 
+<!-- Pitch calibration (AR mode only) -->
+<div id="pitch-ctrl">
+  <label>PITCH OFFSET: <span id="pitch-offset-val">0°</span></label>
+  <input type="range" min="-60" max="60" value="0" id="pitch-slider"
+    oninput="state.pitchOffset=+this.value;document.getElementById('pitch-offset-val').textContent=this.value+'°'">
+</div>
+ 
+<!-- Radar view -->
+<div id="radar-view">
+  <canvas id="radar-canvas"></canvas>
+</div>
+ 
+<!-- Radar list -->
+<div id="radar-list" style="display:none"></div>
+ 
 <!-- No flights -->
 <div id="no-flights-msg">
   <div style="font-size:32px">🔭</div>
-  <p>No flights detected nearby<br>Point at the sky and wait...</p>
+  <p>No flights detected nearby<br>Waiting for data...</p>
 </div>
  
-<!-- Stats bar -->
+<!-- Stats -->
 <div id="stats-bar">
   <div class="stat">
     <span class="stat-label">Heading</span>
@@ -356,121 +285,108 @@
     <span class="stat-value" id="flights-val">--</span>
   </div>
   <div class="stat" style="text-align:right">
-    <span class="stat-label">Last Update</span>
+    <span class="stat-label">Updated</span>
     <span class="stat-value" id="update-val">--:--</span>
   </div>
 </div>
  
 <script>
-// ─── State ───────────────────────────────────────────────
 const state = {
   lat: null, lon: null,
-  heading: 0, pitch: 0,
+  heading: 0, pitch: 90,
+  pitchOffset: 0,
   flights: [],
-  lastFetch: 0,
-  fetchInterval: 15000,
-  fovH: 60, fovV: 90,
-  active: false
+  fetchInterval: 8000,
+  fovH: 65, fovV: 100,
+  active: false,
+  mode: 'ar',
+  noMotion: false
 };
  
-// ─── Elements ────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const splash = $('splash');
-const permScreen = $('permission-screen');
-const errScreen = $('error-screen');
-const video = $('camera-feed');
-const canvas = $('ar-canvas');
-const ctx = canvas.getContext('2d');
-const needle = $('compass-needle');
+let domCards = {};
  
-// ─── Splash → Permissions ─────────────────────────────────
+// ── Screens ──────────────────────────────────────────────
 $('start-btn').addEventListener('click', () => {
-  splash.classList.add('hidden');
-  permScreen.classList.remove('hidden');
+  $('splash').classList.add('hidden');
+  $('permission-screen').classList.remove('hidden');
 });
- 
 $('request-btn').addEventListener('click', requestAll);
 $('retry-btn').addEventListener('click', () => {
-  errScreen.classList.add('hidden');
-  permScreen.classList.remove('hidden');
+  $('error-screen').classList.add('hidden');
+  $('permission-screen').classList.remove('hidden');
 });
  
+function showError(msg) {
+  $('error-msg').textContent = msg;
+  $('error-screen').classList.remove('hidden');
+}
+ 
+// ── Permissions ───────────────────────────────────────────
 async function requestAll() {
-  permScreen.classList.add('hidden');
+  $('permission-screen').classList.add('hidden');
  
-  // Step 1: Camera
-  let stream;
+  // Camera
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' }
-    });
-    video.srcObject = stream;
-  } catch (e) {
-    showError('Camera access failed. Go to Settings → Safari → Camera and set to Allow. Then reload the page.\n\nDetail: ' + e.message);
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    $('camera-feed').srcObject = stream;
+  } catch(e) {
+    showError('Camera failed. Go to Settings → Safari → Camera → Allow.\n\n(' + e.message + ')');
     return;
   }
  
-  // Step 2: Location
+  // Location
   try {
-    await new Promise((res, rej) => {
-      navigator.geolocation.getCurrentPosition(pos => {
-        state.lat = pos.coords.latitude;
-        state.lon = pos.coords.longitude;
+    await new Promise((res, rej) =>
+      navigator.geolocation.getCurrentPosition(p => {
+        state.lat = p.coords.latitude;
+        state.lon = p.coords.longitude;
         res();
-      }, rej, { enableHighAccuracy: true, timeout: 10000 });
-    });
-  } catch (e) {
-    showError('Location access failed. Go to Settings → Privacy & Security → Location Services → Safari and set to "While Using". Then reload.\n\nDetail: ' + (e.message || 'code ' + e.code));
+      }, rej, { enableHighAccuracy: true, timeout: 10000 })
+    );
+  } catch(e) {
+    showError('Location failed. Go to Settings → Privacy & Security → Location Services → Safari → While Using.\n\n(code ' + (e.code||'?') + ')');
     return;
   }
  
-  // Step 3: Motion (iOS 13+)
+  // Motion
   try {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      const perm = await DeviceOrientationEvent.requestPermission();
-      if (perm !== 'granted') {
-        showError('Motion sensor access was denied. Tap "Grant Permissions" again and choose Allow when iOS asks about motion & orientation.');
+    if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+      const p = await DeviceOrientationEvent.requestPermission();
+      if (p !== 'granted') {
+        showError('Motion access denied. Tap Grant Permissions again and choose Allow when iOS asks.');
         return;
       }
     }
-    // If no requestPermission method, motion is available by default (Android/older iOS)
-  } catch (e) {
-    // Motion failed but not critical — continue without it, use manual heading
-    console.warn('Motion permission error:', e);
+  } catch(e) {
     state.noMotion = true;
   }
  
   startAR();
 }
  
-function showError(msg) {
-  $('error-msg').textContent = msg;
-  errScreen.classList.remove('hidden');
-}
- 
-// ─── AR Loop ─────────────────────────────────────────────
+// ── Start ─────────────────────────────────────────────────
 function startAR() {
   state.active = true;
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
   window.addEventListener('deviceorientation', onOrientation, true);
   window.addEventListener('deviceorientationabsolute', onOrientation, true);
- 
   navigator.geolocation.watchPosition(p => {
     state.lat = p.coords.latitude;
     state.lon = p.coords.longitude;
   }, null, { enableHighAccuracy: true });
  
-  // If no motion, show manual heading control
+  // Show pitch calibration slider in AR mode
+  $('pitch-ctrl').style.display = 'block';
+ 
   if (state.noMotion) {
+    // Add manual heading slider
     const ctrl = document.createElement('div');
-    ctrl.style.cssText = 'position:fixed;bottom:100px;left:0;right:0;z-index:20;padding:0 24px;';
-    ctrl.innerHTML = `
-      <div style="color:rgba(255,255,255,0.5);font-size:11px;text-align:center;margin-bottom:6px;letter-spacing:0.08em;">MANUAL HEADING (compass unavailable)</div>
-      <input type="range" min="0" max="359" value="0" id="heading-slider"
-        style="width:100%;accent-color:#00d4ff;"
-        oninput="state.heading=+this.value;document.getElementById('heading-val').textContent=this.value+'°'">
-    `;
+    ctrl.style.cssText = 'position:fixed;bottom:155px;left:20px;right:20px;z-index:15;';
+    ctrl.innerHTML = `<label style="font-size:10px;color:var(--muted);display:block;text-align:center;margin-bottom:4px;letter-spacing:0.08em;">MANUAL HEADING</label>
+      <input type="range" min="0" max="359" value="0" style="width:100%;accent-color:#00d4ff;"
+        oninput="state.heading=+this.value;document.getElementById('heading-val').textContent=this.value+'°'">`;
     document.body.appendChild(ctrl);
   }
  
@@ -479,203 +395,307 @@ function startAR() {
   requestAnimationFrame(render);
 }
  
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+// ── Mode switching ────────────────────────────────────────
+function setMode(m) {
+  state.mode = m;
+  $('btn-ar').classList.toggle('active', m === 'ar');
+  $('btn-radar').classList.toggle('active', m === 'radar');
+  $('radar-view').classList.toggle('active', m === 'radar');
+  $('radar-list').style.display = m === 'radar' ? 'block' : 'none';
+  $('pitch-ctrl').style.display = m === 'ar' ? 'block' : 'none';
+  $('crosshair').style.display = m === 'ar' ? 'block' : 'none';
+ 
+  // Hide/show AR overlay cards
+  Object.values(domCards).forEach(c => c.style.display = m === 'ar' ? 'block' : 'none');
 }
  
-// ─── Orientation ─────────────────────────────────────────
+// ── Resize ────────────────────────────────────────────────
+function resizeCanvas() {
+  const arC = $('ar-canvas');
+  arC.width = window.innerWidth;
+  arC.height = window.innerHeight;
+ 
+  const rC = $('radar-canvas');
+  const size = Math.min(window.innerWidth * 0.88, window.innerHeight * 0.88);
+  rC.width = size; rC.height = size;
+  rC.style.width = size + 'px'; rC.style.height = size + 'px';
+}
+ 
+// ── Orientation ───────────────────────────────────────────
 function onOrientation(e) {
-  // heading: alpha is compass on iOS with webkitCompassHeading
   if (e.webkitCompassHeading !== undefined) {
     state.heading = e.webkitCompassHeading;
   } else if (e.alpha !== null) {
     state.heading = (360 - e.alpha) % 360;
   }
-  // pitch: beta — 0 = flat, 90 = pointing up
-  state.pitch = e.beta ?? 0;
- 
+  state.pitch = e.beta ?? 90;
   $('heading-val').textContent = Math.round(state.heading) + '°';
-  needle.setAttribute('transform', `rotate(${state.heading}, 26, 26)`);
+  $('compass-needle').setAttribute('transform', `rotate(${state.heading},26,26)`);
 }
  
-// ─── Flight Fetch ─────────────────────────────────────────
+// ── Fetch flights ─────────────────────────────────────────
 async function fetchFlights() {
   if (!state.lat || !state.lon) return;
-  const r = 1.2; // ~130km box
-  const url = `https://opensky-network.org/api/states/all?lamin=${state.lat-r}&lomin=${state.lon-r}&lamax=${state.lat+r}&lomax=${state.lon+r}`;
+  const tried = await tryADSBLol();
+  if (!tried) await tryOpenSky();
+}
  
+async function tryADSBLol() {
   try {
+    const url = `https://api.adsb.lol/v2/lat/${state.lat}/lon/${state.lon}/dist/150`;
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data.ac || !data.ac.length) return false;
+    state.flights = data.ac
+      .filter(a => a.lat && a.lon && (a.alt_baro||a.alt_geom||0) > 500)
+      .map(a => ({
+        icao: a.hex||"?",
+        callsign: (a.flight||"").trim() || (a.hex||"?").toUpperCase(),
+        country: a.r||"?",
+        lon: a.lon, lat: a.lat,
+        altitude: Math.round(a.alt_baro||a.alt_geom||0),
+        speed: a.gs ? Math.round(a.gs) : null,
+        trackHdg: a.track ? Math.round(a.track) : null,
+        origin: a.orig_iata||null, dest: a.dest_iata||null,
+      }));
+    updateFlightUI();
+    return true;
+  } catch(e) { console.warn("adsb.lol failed:", e); return false; }
+}
+ 
+async function tryOpenSky() {
+  try {
+    const r = 1.5;
+    const url = `https://opensky-network.org/api/states/all?lamin=${state.lat-r}&lomin=${state.lon-r}&lamax=${state.lat+r}&lomax=${state.lon+r}`;
     const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
-    if (!data.states) { state.flights = []; return; }
- 
+    if (!data.states) return;
     state.flights = data.states
-      .filter(s => s[5] && s[6] && s[7] > 500) // has position & altitude
+      .filter(s => s[5] && s[6] && s[7] > 500)
       .map(s => ({
         icao: s[0],
-        callsign: (s[1] || 'Unknown').trim() || s[0].toUpperCase(),
-        country: s[2] || '?',
-        lon: s[5],
-        lat: s[6],
-        altitude: Math.round(s[7] * 3.28084), // m → ft
-        speed: s[9] ? Math.round(s[9] * 1.94384) : null, // m/s → knots
-        heading: s[10] ? Math.round(s[10]) : null,
-        origin: s[11] || null,
-        dest: s[12] || null,
+        callsign: (s[1]||"").trim() || s[0].toUpperCase(),
+        country: s[2]||"?",
+        lon: s[5], lat: s[6],
+        altitude: Math.round(s[7] * 3.28084),
+        speed: s[9] ? Math.round(s[9]*1.94384) : null,
+        trackHdg: s[10] ? Math.round(s[10]) : null,
+        origin: s[11]||null, dest: s[12]||null,
       }));
- 
-    $('flights-val').textContent = state.flights.length;
-    const now = new Date();
-    $('update-val').textContent = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-  } catch(e) {
-    console.warn('Flight fetch failed', e);
-  }
+    updateFlightUI();
+  } catch(e) { console.warn("OpenSky failed:", e); }
 }
  
-// ─── Bearing & Distance ──────────────────────────────────
-function bearingTo(lat1, lon1, lat2, lon2) {
-  const toRad = d => d * Math.PI / 180;
-  const dLon = toRad(lon2 - lon1);
-  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
-  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
-  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+function updateFlightUI() {
+  $("flights-val").textContent = state.flights.length;
+  const n = new Date();
+  $("update-val").textContent = String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
 }
  
-function distanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2-lat1) * Math.PI/180;
-  const dLon = (lon2-lon1) * Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+// ── Math helpers ──────────────────────────────────────────
+function bearingTo(la1,lo1,la2,lo2) {
+  const r=Math.PI/180, dL=(lo2-lo1)*r;
+  const y=Math.sin(dL)*Math.cos(la2*r);
+  const x=Math.cos(la1*r)*Math.sin(la2*r)-Math.sin(la1*r)*Math.cos(la2*r)*Math.cos(dL);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
 }
- 
-function elevationAngle(distKm, altFt) {
-  const altM = altFt / 3.28084;
-  return Math.atan2(altM, distKm * 1000) * 180 / Math.PI;
+function distKm(la1,lo1,la2,lo2) {
+  const R=6371,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
- 
-// ─── Project to screen ───────────────────────────────────
-function projectFlight(flight) {
-  const bearing = bearingTo(state.lat, state.lon, flight.lat, flight.lon);
-  const dist = distanceKm(state.lat, state.lon, flight.lat, flight.lon);
-  const elev = elevationAngle(dist, flight.altitude);
- 
-  // Angular delta from current heading
+function elevAngle(distKm, altFt) {
+  return Math.atan2(altFt/3.28084, distKm*1000)*180/Math.PI;
+}
+function projectFlight(f) {
+  const bearing = bearingTo(state.lat,state.lon,f.lat,f.lon);
+  const dist    = distKm(state.lat,state.lon,f.lat,f.lon);
+  const elev    = elevAngle(dist, f.altitude);
   let dAz = bearing - state.heading;
-  if (dAz > 180) dAz -= 360;
-  if (dAz < -180) dAz += 360;
- 
-  // Elevation: phone pitch 90 = pointing straight up
-  // When pitch=90, elev=90 should be center screen
-  // When pitch=0 (horizontal), elev=0 (horizon) is center
-  const dEl = elev - (state.pitch - 90);
- 
-  const W = canvas.width, H = canvas.height;
-  const x = W/2 + (dAz / (state.fovH/2)) * (W/2);
-  const y = H/2 - (dEl / (state.fovV/2)) * (H/2);
- 
-  const onScreen = Math.abs(dAz) < state.fovH && Math.abs(dEl) < state.fovV * 1.5;
- 
-  return { x, y, onScreen, bearing, dist, elev, dAz, dEl };
+  if (dAz>180) dAz-=360; if (dAz<-180) dAz+=360;
+  // pitch: 90=flat on table, 0=vertical. When pointing up phone pitch→0
+  // adjusted elev relative to pitch
+  const effectivePitch = state.pitch + state.pitchOffset;
+  const dEl = elev - (90 - effectivePitch);
+  const W=window.innerWidth, H=window.innerHeight;
+  const x = W/2 + (dAz/(state.fovH/2))*(W/2);
+  const y = H/2 - (dEl/(state.fovV/2))*(H/2);
+  const onScreen = Math.abs(dAz)<state.fovH && Math.abs(dEl)<state.fovV;
+  return { x, y, onScreen, bearing, dist, elev };
 }
  
-// ─── Render ───────────────────────────────────────────────
-// Remove old DOM cards
-let domCards = {};
- 
+// ── Render ────────────────────────────────────────────────
 function render() {
-  if (!state.active) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!state.active) { requestAnimationFrame(render); return; }
  
-  const visibleIds = new Set();
+  if (state.mode === 'ar') renderAR();
+  else renderRadar();
  
-  state.flights.forEach(flight => {
-    const proj = projectFlight(flight);
-    if (!proj.onScreen) return;
+  $('no-flights-msg').classList.toggle('visible', state.flights.length===0 && state.active);
+  requestAnimationFrame(render);
+}
  
-    visibleIds.add(flight.icao);
+function renderAR() {
+  const canvas = $('ar-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const visible = new Set();
  
-    // Draw dot
+  state.flights.forEach(f => {
+    const p = projectFlight(f);
+    if (!p.onScreen) return;
+    visible.add(f.icao);
+ 
+    // dot
     ctx.beginPath();
-    ctx.arc(proj.x, proj.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = proj.dist < 50 ? '#00d4ff' : '#ff6b35';
-    ctx.shadowColor = proj.dist < 50 ? '#00d4ff' : '#ff6b35';
-    ctx.shadowBlur = 12;
+    ctx.arc(p.x,p.y,5,0,Math.PI*2);
+    ctx.fillStyle = p.dist<50 ? '#00d4ff' : '#ff6b35';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 14;
     ctx.fill();
     ctx.shadowBlur = 0;
  
-    // Draw line to card
+    // stem
     ctx.beginPath();
-    ctx.moveTo(proj.x, proj.y - 5);
-    ctx.lineTo(proj.x, proj.y - 40);
-    ctx.strokeStyle = 'rgba(0,212,255,0.3)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.moveTo(p.x, p.y-5);
+    ctx.lineTo(p.x, p.y-42);
+    ctx.strokeStyle='rgba(0,212,255,0.3)';
+    ctx.lineWidth=1; ctx.stroke();
  
-    // DOM card
-    if (!domCards[flight.icao]) {
+    // card
+    if (!domCards[f.icao]) {
       const card = document.createElement('div');
-      card.className = 'flight-card';
-      card.id = 'card-' + flight.icao;
+      card.className='flight-card';
       document.body.appendChild(card);
-      domCards[flight.icao] = card;
+      domCards[f.icao]=card;
     }
- 
-    const card = domCards[flight.icao];
-    card.style.left = proj.x + 'px';
-    card.style.top = (proj.y - 44) + 'px';
- 
-    const route = flight.origin && flight.dest
-      ? `${flight.origin.substring(0,4)} → ${flight.dest.substring(0,4)}`
-      : flight.country;
- 
-    card.innerHTML = `
-      <div class="card-callsign">${flight.callsign}</div>
+    const card=domCards[f.icao];
+    card.style.display='block';
+    card.style.left=p.x+'px';
+    card.style.top=(p.y-44)+'px';
+    const route = f.origin&&f.dest ? `${f.origin.slice(0,4)} → ${f.dest.slice(0,4)}` : f.country;
+    card.innerHTML=`
+      <div class="card-callsign">${f.callsign}</div>
       <div class="card-route">${route}</div>
       <div class="card-divider"></div>
       <div class="card-row">
-        <div class="card-field">
-          <span class="field-label">Altitude</span>
-          <span class="field-value">${flight.altitude.toLocaleString()} ft</span>
-        </div>
-        <div class="card-field" style="text-align:right">
-          <span class="field-label">Distance</span>
-          <span class="field-value">${Math.round(proj.dist)} km</span>
-        </div>
+        <div class="card-field"><span class="field-label">Altitude</span><span class="field-value">${f.altitude.toLocaleString()} ft</span></div>
+        <div class="card-field" style="text-align:right"><span class="field-label">Distance</span><span class="field-value">${Math.round(p.dist)} km</span></div>
       </div>
       <div class="card-row">
-        <div class="card-field">
-          <span class="field-label">Speed</span>
-          <span class="field-value">${flight.speed ? flight.speed + ' kts' : '---'}</span>
-        </div>
-        <div class="card-field" style="text-align:right">
-          <span class="field-label">Bearing</span>
-          <span class="field-value">${Math.round(proj.bearing)}°</span>
-        </div>
+        <div class="card-field"><span class="field-label">Speed</span><span class="field-value">${f.speed?f.speed+' kts':'---'}</span></div>
+        <div class="card-field" style="text-align:right"><span class="field-label">Bearing</span><span class="field-value">${Math.round(p.bearing)}°</span></div>
+      </div>`;
+  });
+ 
+  Object.keys(domCards).forEach(id => {
+    if (!visible.has(id)) { domCards[id].remove(); delete domCards[id]; }
+  });
+}
+ 
+function renderRadar() {
+  // Hide AR cards
+  Object.values(domCards).forEach(c => c.style.display='none');
+ 
+  const canvas = $('radar-canvas');
+  const ctx = canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, R=W/2-10;
+ 
+  ctx.clearRect(0,0,W,H);
+ 
+  // Background
+  const grad = ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+  grad.addColorStop(0,'#001a22'); grad.addColorStop(1,'#000d12');
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2);
+  ctx.fillStyle=grad; ctx.fill();
+ 
+  // Rings
+  [0.25,0.5,0.75,1].forEach(f => {
+    ctx.beginPath(); ctx.arc(cx,cy,R*f,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,212,255,0.1)'; ctx.lineWidth=1; ctx.stroke();
+  });
+ 
+  // Cross lines
+  ctx.strokeStyle='rgba(0,212,255,0.08)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.stroke();
+ 
+  // Compass labels
+  ctx.fillStyle='rgba(0,212,255,0.4)'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('N',cx,cy-R+14);
+  ctx.fillText('S',cx,cy+R-6);
+  ctx.fillText('E',cx+R-8,cy+4);
+  ctx.fillText('W',cx-R+8,cy+4);
+ 
+  // Sweep line (heading)
+  const sweepRad = (state.heading-90)*Math.PI/180;
+  const sweepGrad = ctx.createLinearGradient(cx,cy,cx+Math.cos(sweepRad)*R,cy+Math.sin(sweepRad)*R);
+  sweepGrad.addColorStop(0,'rgba(0,212,255,0.0)');
+  sweepGrad.addColorStop(1,'rgba(0,212,255,0.25)');
+  ctx.beginPath(); ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+Math.cos(sweepRad)*R, cy+Math.sin(sweepRad)*R);
+  ctx.strokeStyle=sweepGrad; ctx.lineWidth=2; ctx.stroke();
+ 
+  // Max range ~130km
+  const maxDist = 130;
+ 
+  // Flights
+  const sorted = [...state.flights].map(f => ({
+    f,
+    bearing: bearingTo(state.lat,state.lon,f.lat,f.lon),
+    dist: distKm(state.lat,state.lon,f.lat,f.lon)
+  })).sort((a,b)=>a.dist-b.dist);
+ 
+  sorted.forEach(({f, bearing, dist}) => {
+    const frac = Math.min(dist/maxDist, 1);
+    const rad = (bearing-90)*Math.PI/180;
+    const px = cx + Math.cos(rad)*frac*R;
+    const py = cy + Math.sin(rad)*frac*R;
+    const near = dist < 50;
+ 
+    // Glow
+    ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2);
+    ctx.fillStyle = near ? 'rgba(0,212,255,0.12)' : 'rgba(255,107,53,0.12)';
+    ctx.fill();
+ 
+    // Dot
+    ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2);
+    ctx.fillStyle = near ? '#00d4ff' : '#ff6b35';
+    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur=8;
+    ctx.fill(); ctx.shadowBlur=0;
+ 
+    // Label
+    ctx.fillStyle='rgba(240,244,255,0.8)';
+    ctx.font='bold 9px sans-serif'; ctx.textAlign='left';
+    ctx.fillText(f.callsign, px+7, py+4);
+  });
+ 
+  // You (center dot)
+  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+  ctx.fillStyle='#fff'; ctx.shadowColor='#fff'; ctx.shadowBlur=10;
+  ctx.fill(); ctx.shadowBlur=0;
+ 
+  // Range labels
+  ctx.fillStyle='rgba(0,212,255,0.3)'; ctx.font='9px sans-serif'; ctx.textAlign='left';
+  ['33km','65km','98km','130km'].forEach((label,i) => {
+    ctx.fillText(label, cx+4, cy-(R*(i+1)/4)+3);
+  });
+ 
+  // Radar list
+  const list = $('radar-list');
+  list.innerHTML = sorted.map(({f,bearing,dist}) => `
+    <div class="radar-item">
+      <div class="ri-left">
+        <div class="ri-callsign">${f.callsign}</div>
+        <div class="ri-route">${f.origin&&f.dest ? f.origin.slice(0,4)+' → '+f.dest.slice(0,4) : f.country} · ${Math.round(bearing)}°</div>
       </div>
-    `;
-  });
- 
-  // Remove off-screen cards
-  Object.keys(domCards).forEach(icao => {
-    if (!visibleIds.has(icao)) {
-      domCards[icao].remove();
-      delete domCards[icao];
-    }
-  });
- 
-  // No flights message
-  const noFlights = $('no-flights-msg');
-  if (state.flights.length === 0) {
-    noFlights.classList.add('visible');
-  } else {
-    noFlights.classList.remove('visible');
-  }
- 
-  requestAnimationFrame(render);
+      <div class="ri-right">
+        <div class="ri-alt">${f.altitude.toLocaleString()} ft</div>
+        <div class="ri-dist">${Math.round(dist)} km away</div>
+      </div>
+    </div>`).join('');
 }
 </script>
 </body>
