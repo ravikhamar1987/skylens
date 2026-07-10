@@ -274,6 +274,9 @@
   <p>No flights detected nearby<br>Waiting for data...</p>
 </div>
  
+<!-- Debug log -->
+<div id="debug-log" style="position:fixed;top:160px;left:10px;right:10px;z-index:20;font-size:10px;font-family:monospace;color:rgba(0,255,100,0.85);pointer-events:none;background:rgba(0,0,0,0.55);padding:6px 8px;border-radius:8px;max-height:120px;overflow:hidden;"></div>
+ 
 <!-- Stats -->
 <div id="stats-bar">
   <div class="stat">
@@ -434,22 +437,36 @@ function onOrientation(e) {
 }
  
 // ── Fetch flights ─────────────────────────────────────────
+function debugLog(msg) {
+  const el = document.getElementById("debug-log");
+  if (!el) return;
+  const line = document.createElement("div");
+  line.textContent = new Date().toLocaleTimeString() + " " + msg;
+  el.prepend(line);
+  while (el.children.length > 8) el.removeChild(el.lastChild);
+}
+ 
 async function fetchFlights() {
-  if (!state.lat || !state.lon) return;
+  if (!state.lat || !state.lon) { debugLog("No GPS yet"); return; }
+  debugLog("Fetching... GPS:(" + state.lat.toFixed(3) + "," + state.lon.toFixed(3) + ")");
   const tried = await tryADSBLol();
   if (!tried) await tryOpenSky();
 }
  
 async function tryADSBLol() {
   try {
-    const url = `https://api.adsb.lol/v2/lat/${state.lat}/lon/${state.lon}/dist/150`;
-    const res = await fetch(url);
+    const url = "https://api.adsb.lol/v2/lat/" + state.lat + "/lon/" + state.lon + "/dist/150";
+    debugLog("-> adsb.lol request");
+    const res = await fetch(url, { mode: "cors" });
+    debugLog("<- adsb.lol status: " + res.status);
     if (!res.ok) return false;
     const data = await res.json();
+    const raw = data.ac ? data.ac.length : 0;
+    debugLog("adsb.lol raw: " + raw + " aircraft");
     if (!data.ac || !data.ac.length) return false;
     state.flights = data.ac
-      .filter(a => a.lat && a.lon && (a.alt_baro||a.alt_geom||0) > 500)
-      .map(a => ({
+      .filter(function(a) { return a.lat && a.lon && (a.alt_baro||a.alt_geom||0) > 500; })
+      .map(function(a) { return {
         icao: a.hex||"?",
         callsign: (a.flight||"").trim() || (a.hex||"?").toUpperCase(),
         country: a.r||"?",
@@ -458,23 +475,29 @@ async function tryADSBLol() {
         speed: a.gs ? Math.round(a.gs) : null,
         trackHdg: a.track ? Math.round(a.track) : null,
         origin: a.orig_iata||null, dest: a.dest_iata||null,
-      }));
+      }; });
+    debugLog("OK " + state.flights.length + " flights loaded");
     updateFlightUI();
     return true;
-  } catch(e) { console.warn("adsb.lol failed:", e); return false; }
+  } catch(e) {
+    debugLog("FAIL adsb.lol: " + e.message);
+    return false;
+  }
 }
  
 async function tryOpenSky() {
   try {
     const r = 1.5;
-    const url = `https://opensky-network.org/api/states/all?lamin=${state.lat-r}&lomin=${state.lon-r}&lamax=${state.lat+r}&lomax=${state.lon+r}`;
-    const res = await fetch(url);
+    const url = "https://opensky-network.org/api/states/all?lamin=" + (state.lat-r) + "&lomin=" + (state.lon-r) + "&lamax=" + (state.lat+r) + "&lomax=" + (state.lon+r);
+    debugLog("-> OpenSky request");
+    const res = await fetch(url, { mode: "cors" });
+    debugLog("<- OpenSky status: " + res.status);
     if (!res.ok) return;
     const data = await res.json();
-    if (!data.states) return;
+    if (!data.states) { debugLog("OpenSky: no states"); return; }
     state.flights = data.states
-      .filter(s => s[5] && s[6] && s[7] > 500)
-      .map(s => ({
+      .filter(function(s) { return s[5] && s[6] && s[7] > 500; })
+      .map(function(s) { return {
         icao: s[0],
         callsign: (s[1]||"").trim() || s[0].toUpperCase(),
         country: s[2]||"?",
@@ -483,15 +506,18 @@ async function tryOpenSky() {
         speed: s[9] ? Math.round(s[9]*1.94384) : null,
         trackHdg: s[10] ? Math.round(s[10]) : null,
         origin: s[11]||null, dest: s[12]||null,
-      }));
+      }; });
+    debugLog("OK OpenSky: " + state.flights.length + " flights");
     updateFlightUI();
-  } catch(e) { console.warn("OpenSky failed:", e); }
+  } catch(e) {
+    debugLog("FAIL OpenSky: " + e.message);
+  }
 }
  
 function updateFlightUI() {
-  $("flights-val").textContent = state.flights.length;
+  document.getElementById("flights-val").textContent = state.flights.length;
   const n = new Date();
-  $("update-val").textContent = String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
+  document.getElementById("update-val").textContent = String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
 }
  
 // ── Math helpers ──────────────────────────────────────────
